@@ -20,3 +20,5 @@ L’objectif est de proposer une solution open source, modulaire et facile à d�
 - 8\. Déploiement de l'application : utilisation de Docker, Docker Compose et Nginx pour rendre l'application accessible sur le réseau local.
 
 Faire une page Paramètres pour choisir les trucs à vérifier, le temps etc en fonction de là où l'appli est utilisée
+
+Faire page Historique
