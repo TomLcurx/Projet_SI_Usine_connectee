@@ -1,1 +1,21 @@
-
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "Backend de l'application de supervision d'automates",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.8",
+    "express": "^5.3.0",
+    "modbus-serial": "^8.0.25",
+    "mysql2": "^3.24.6"
+  }
+}
