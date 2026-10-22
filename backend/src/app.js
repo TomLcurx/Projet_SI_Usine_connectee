@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const modbusRoutes = require("../routes/modbus.route");
 
 const app = express();
 const automateRoutes = require("../routes/automate.route");
@@ -17,6 +18,7 @@ app.get("/api/health", (req, res) => {
 
 // Routes des automates
 app.use("/api/automates", automateRoutes);
+app.use("/api/automates", modbusRoutes);
 
 const db = require("./config");
 
