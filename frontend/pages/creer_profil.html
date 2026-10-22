@@ -1,0 +1,80 @@
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Créer un profil | Supervision industrielle</title>
+    <link rel="stylesheet" href="../style.css">
+    <script src="../js/script.js" defer></script>
+</head>
+<body class="page-connexion">
+    <main class="carte-connexion">
+        <div class="logo-usine">SI</div>
+
+        <h1>Créer un profil</h1>
+        <p class="sous-titre">Créez votre accès à la supervision industrielle</p>
+
+        <form id="form-creation-profil">
+            <label for="role">Type de profil</label>
+            <select id="role" name="role" required>
+                <option value="operateur">Opérateur</option>
+                <option value="admin">Administrateur</option>
+            </select>
+
+            <div id="zone-code-admin" hidden>
+                <label for="secretAdmin">Code secret administrateur</label>
+                <input
+                    type="password"
+                    id="secretAdmin"
+                    name="secretAdmin"
+                    autocomplete="off"
+                >
+            </div>
+
+            <label for="nouvel-identifiant">Identifiant</label>
+            <input
+                type="text"
+                id="nouvel-identifiant"
+                name="identifiant"
+                autocomplete="username"
+                required
+            >
+
+            <label for="nouveau-mot-de-passe">Mot de passe</label>
+            <input
+                type="password"
+                id="nouveau-mot-de-passe"
+                name="motDePasse"
+                autocomplete="new-password"
+                minlength="8"
+                required
+            >
+
+            <label for="confirmation-mot-de-passe">Confirmer le mot de passe</label>
+            <input
+                type="password"
+                id="confirmation-mot-de-passe"
+                name="confirmationMotDePasse"
+                autocomplete="new-password"
+                minlength="8"
+                required
+            >
+
+            <p id="message-creation" class="message" role="status"></p>
+
+            <button type="submit" class="bouton-principal">
+                Créer mon profil
+            </button>
+        </form>
+
+        <div class="separateur"></div>
+
+        <a href="../index.html" class="bouton-secondaire">
+            Retour à la connexion
+        </a>
+
+        <p class="mention-legale">
+            Système de supervision d'automates industriels
+        </p>
+    </main>
+</body>
+</html>

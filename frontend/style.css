@@ -171,3 +171,240 @@ form select:focus {
 .message.succes {
     color: var(--vert);
 }
+
+
+/* ===== Application de supervision ===== */
+
+.page-application {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--fond, #F5F5F5);
+    color: var(--texte, #252525);
+    font-family: Arial, sans-serif;
+}
+
+.page-application * {
+    box-sizing: border-box;
+}
+
+.barre-laterale {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 250px;
+    display: flex;
+    flex-direction: column;
+    background: var(--noir-unilasalle, #171717);
+    color: white;
+    padding: 25px 16px;
+}
+
+.page-application .logo-usine {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 8px 30px;
+    color: white;
+}
+
+.logo-usine > span {
+    display: grid;
+    place-items: center;
+    min-width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    background: var(--rouge-unilasalle, #D9252A);
+    font-weight: bold;
+}
+
+.logo-usine strong,
+.logo-usine small {
+    display: block;
+}
+
+.logo-usine small {
+    margin-top: 5px;
+    color: #c5c5c5;
+}
+
+.barre-laterale nav {
+    display: grid;
+    gap: 8px;
+}
+
+.lien-navigation {
+    padding: 13px 14px;
+    border-radius: 7px;
+    color: #dedede;
+    text-decoration: none;
+}
+
+.lien-navigation:hover,
+.lien-navigation.actif {
+    background: var(--rouge-unilasalle, #D9252A);
+    color: white;
+}
+
+.bas-sidebar {
+    display: grid;
+    gap: 6px;
+    margin-top: auto;
+    padding: 16px 8px 0;
+    border-top: 1px solid #454545;
+}
+
+.bas-sidebar small {
+    color: #c5c5c5;
+}
+
+.contenu-principal {
+    margin-left: 250px;
+    padding: 30px;
+}
+
+.barre-superieure {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    padding-bottom: 25px;
+    border-bottom: 1px solid var(--bordure, #DEDEDE);
+}
+
+.barre-superieure h1,
+.bienvenue h2,
+.titre-section h2 {
+    margin: 0;
+}
+
+.barre-superieure p,
+.bienvenue p,
+.titre-section p {
+    color: var(--texte-secondaire, #707070);
+}
+
+.actions-haut,
+.profil-utilisateur {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.indicateur-api {
+    padding: 8px 12px;
+    border-radius: 20px;
+    background: #eeeeee;
+    font-size: 13px;
+}
+
+.profil-utilisateur {
+    padding-left: 14px;
+    border-left: 1px solid var(--bordure, #DEDEDE);
+}
+
+.icone-utilisateur {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--rouge-unilasalle, #D9252A);
+    color: white;
+    font-weight: bold;
+}
+
+.profil-utilisateur strong,
+.profil-utilisateur small {
+    display: block;
+}
+
+.profil-utilisateur small {
+    margin-top: 4px;
+    color: var(--texte-secondaire, #707070);
+}
+
+.bouton-secondaire {
+    padding: 9px 12px;
+    border: 1px solid var(--bordure, #DEDEDE);
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
+}
+
+.bouton-secondaire:hover {
+    border-color: var(--rouge-unilasalle, #D9252A);
+}
+
+.bienvenue {
+    margin: 28px 0;
+    padding: 26px;
+    border-left: 5px solid var(--rouge-unilasalle, #D9252A);
+    border-radius: 8px;
+    background: white;
+}
+
+.grille-indicateurs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.carte-indicateur {
+    display: grid;
+    gap: 12px;
+    padding: 22px;
+    border: 1px solid var(--bordure, #DEDEDE);
+    border-radius: 9px;
+    background: white;
+}
+
+.carte-indicateur > span,
+.carte-indicateur small {
+    color: var(--texte-secondaire, #707070);
+}
+
+.carte-indicateur > strong {
+    font-size: 30px;
+}
+
+.section-tableau {
+    margin-top: 28px;
+    padding: 24px;
+    border: 1px solid var(--bordure, #DEDEDE);
+    border-radius: 9px;
+    background: white;
+}
+
+.tableau-defaut {
+    margin-top: 20px;
+    padding: 24px;
+    border: 1px dashed var(--bordure, #DEDEDE);
+    border-radius: 8px;
+    color: var(--texte-secondaire, #707070);
+    text-align: center;
+}
+
+@media (max-width: 900px) {
+    .barre-laterale {
+        position: static;
+        width: 100%;
+    }
+
+    .barre-laterale nav {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .bas-sidebar {
+        display: none;
+    }
+
+    .contenu-principal {
+        margin-left: 0;
+        padding: 20px;
+    }
+
+    .grille-indicateurs {
+        grid-template-columns: 1fr;
+    }
+}
