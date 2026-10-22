@@ -1,1 +1,187 @@
-<
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Historique | Usine Connectée</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <h2>⚙ Usine Connectée</h2>
+    <a href="dashboard.html">Tableau de bord</a>
+    <a href="parametres.html">Paramètres</a>
+    <a class="active" href="historique.html">Historique</a>
+    <a href="index.html">Déconnexion</a>
+  </aside>
+
+  <main class="main-content">
+    <header class="page-header">
+      <div>
+        <h1>Historique des mesures</h1>
+        <p class="muted">Consultation et export des données de production</p>
+      </div>
+    </header>
+
+    <section class="panel">
+      <form id="filterForm" class="form-grid">
+        <div>
+          <label for="variableId">Variable</label>
+          <select id="variableId" required></select>
+        </div>
+        <div>
+          <label for="startDate">Du</label>
+          <input type="datetime-local" id="startDate" required>
+        </div>
+        <div>
+          <label for="endDate">Au</label>
+          <input type="datetime-local" id="endDate" required>
+        </div>
+        <button class="btn btn-primary" type="submit">Rechercher</button>
+        <button class="btn btn-secondary" type="button" id="exportBtn">
+          Exporter CSV
+        </button>
+      </form>
+      <p id="message" class="message" role="status"></p>
+    </section>
+
+    <section class="panel">
+      <h2>Résultats</h2>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr><th>Date et heure</th><th>Variable</th><th>Valeur</th><th>Unité</th></tr>
+          </thead>
+          <tbody id="historyTable">
+            <tr><td colspan="4">Sélectionnez une période.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const API = "/api";
+    let measurements = [];
+
+    async function api(path) {
+      const response = await fetch(API + path, {
+        credentials: "include"
+      });
+      if (response.status === 401 || response.status === 403) {
+        window.location.href = "index.html";
+        throw new Error("Session expirée ou accès refusé.");
+      }
+      if (!response.ok) throw new Error(`Erreur HTTP ${response.status}`);
+      return response.json();
+    }
+
+    async function loadVariables() {
+      const data = await api("/variables");
+      const variables = Array.isArray(data) ? data : data.data ?? data.variables ?? [];
+      const select = document.getElementById("variableId");
+
+      variables.forEach(v => {
+        const option = document.createElement("option");
+        option.value = v.id;
+        option.textContent = v.name ?? v.nom ?? v.variable;
+        select.appendChild(option);
+      });
+
+      const now = new Date();
+      const earlier = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const local = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+        .toISOString().slice(0, 16);
+
+      document.getElementById("endDate").value = local(now);
+      document.getElementById("startDate").value = local(earlier);
+    }
+
+    document.getElementById("filterForm").addEventListener("submit", async e => {
+      e.preventDefault();
+      const message = document.getElementById("message");
+      const start = document.getElementById("startDate").value;
+      const end = document.getElementById("endDate").value;
+
+      if (new Date(start) > new Date(end)) {
+        message.textContent = "La date de début doit précéder la date de fin.";
+        return;
+      }
+
+      const params = new URLSearchParams({
+        variableId: document.getElementById("variableId").value,
+        startDate: new Date(start).toISOString(),
+        endDate: new Date(end).toISOString()
+      });
+
+      try {
+        const data = await api(`/history?${params}`);
+        measurements = Array.isArray(data) ? data : data.data ?? data.measurements ?? [];
+
+        const tbody = document.getElementById("historyTable");
+        tbody.replaceChildren();
+
+        if (!measurements.length) {
+          tbody.innerHTML = '<tr><td colspan="4">Aucune mesure sur cette période.</td></tr>';
+        }
+
+        measurements.forEach(m => {
+          const tr = document.createElement("tr");
+          [
+            m.timestamp ?? m.horodatage ?? m.date,
+            m.variableName ?? m.name ?? m.nom ?? document.getElementById("variableId").selectedOptions[0]?.text,
+            m.value ?? m.valeur,
+            m.unit ?? m.unite ?? ""
+          ].forEach((value, i) => {
+            const td = document.createElement("td");
+            td.textContent = i === 0 && value
+              ? new Date(value).toLocaleString()
+              : value ?? "—";
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+
+        message.textContent = `${measurements.length} mesure(s) trouvée(s).`;
+      } catch (err) {
+        message.textContent = err.message;
+      }
+    });
+
+    document.getElementById("exportBtn").addEventListener("click", () => {
+      if (!measurements.length) {
+        document.getElementById("message").textContent =
+          "Effectuez une recherche avant l'export.";
+        return;
+      }
+
+      const escapeCSV = value =>
+        '"' + String(value ?? "").replace(/"/g, '""') + '"';
+
+      const rows = [
+        ["Date", "Variable", "Valeur", "Unité"],
+        ...measurements.map(m => [
+          m.timestamp ?? m.horodatage ?? m.date,
+          m.variableName ?? m.name ?? m.nom ?? "",
+          m.value ?? m.valeur,
+          m.unit ?? m.unite ?? ""
+        ])
+      ];
+
+      const csv = "\uFEFF" + rows.map(row => row.map(escapeCSV).join(";")).join("\r\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "historique-mesures.csv";
+      link.click();
+      URL.revokeObjectURL(url);
+    });
+
+    loadVariables().catch(err => {
+      document.getElementById("message").textContent = err.message;
+    });
+  </script>
+</body>
+</html>

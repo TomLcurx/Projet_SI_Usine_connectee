@@ -1,1 +1,65 @@
-<
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Connexion | SI Usine Connectée</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="login-page">
+  <main class="login-card">
+    <div class="brand-icon">⚙</div>
+    <h1>Usine Connectée</h1>
+    <p class="muted">Système de supervision industrielle</p>
+
+    <form id="loginForm">
+      <label for="username">Identifiant</label>
+      <input id="username" name="username" autocomplete="username"
+             required placeholder="Votre identifiant">
+
+      <label for="password">Mot de passe</label>
+      <input id="password" name="password" type="password"
+             autocomplete="current-password" required
+             placeholder="Votre mot de passe">
+
+      <button type="submit" class="btn btn-primary full-width">
+        Se connecter
+      </button>
+      <p id="message" class="message" role="alert"></p>
+    </form>
+    <p class="muted small">PAUC &gt; FISE · 2026/2027</p>
+  </main>
+
+  <script>
+    const API = "/api";
+
+    document.getElementById("loginForm").addEventListener("submit",
+      async (event) => {
+        event.preventDefault();
+        const message = document.getElementById("message");
+        message.textContent = "Connexion en cours…";
+
+        try {
+          const response = await fetch(`${API}/auth/login`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              username: document.getElementById("username").value,
+              password: document.getElementById("password").value
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error("Identifiants incorrects ou serveur indisponible.");
+          }
+
+          window.location.href = "dashboard.html";
+        } catch (error) {
+          message.textContent = error.message;
+        }
+      });
+  </script>
+</body>
+</html>

@@ -1,1 +1,290 @@
 
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Paramètres | Usine Connectée</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <h2>⚙ Usine Connectée</h2>
+    <a href="dashboard.html">Tableau de bord</a>
+    <a class="active" href="parametres.html">Paramètres</a>
+    <a href="historique.html">Historique</a>
+    <a href="index.html">Déconnexion</a>
+  </aside>
+
+  <main class="main-content">
+    <header class="page-header">
+      <div>
+        <h1>Paramétrage</h1>
+        <p class="muted">Configuration des automates et des variables</p>
+      </div>
+    </header>
+
+    <section class="panel">
+      <h2>Connexion automate</h2>
+      <form id="plcForm" class="form-grid">
+        <div>
+          <label for="plcName">Nom de l'automate</label>
+          <input id="plcName" required placeholder="Automate production">
+        </div>
+        <div>
+          <label for="plcIp">Adresse IP</label>
+          <input id="plcIp" required type="text"
+                 placeholder="192.168.1.10">
+        </div>
+        <div>
+          <label for="plcPort">Port Modbus TCP</label>
+          <input id="plcPort" type="number" min="1" max="65535" value="502" required>
+        </div>
+        <div>
+          <label for="plcUnit">Identifiant Modbus</label>
+          <input id="plcUnit" type="number" min="0" max="255" value="1" required>
+        </div>
+        <button class="btn btn-primary" type="submit">Enregistrer l'automate</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>Définir une variable</h2>
+      <form id="variableForm" class="form-grid">
+        <div>
+          <label for="varName">Nom</label>
+          <input id="varName" required placeholder="Température cuve">
+        </div>
+        <div>
+          <label for="varPlc">Automate</label>
+          <select id="varPlc" required></select>
+        </div>
+        <div>
+          <label for="varAddress">Adresse / registre</label>
+          <input id="varAddress" required placeholder="40001">
+        </div>
+        <div>
+          <label for="varType">Type de donnée</label>
+          <select id="varType">
+            <option value="float">Float</option>
+            <option value="int">Entier</option>
+            <option value="boolean">Booléen</option>
+          </select>
+        </div>
+        <div>
+          <label for="varUnit">Unité</label>
+          <input id="varUnit" placeholder="°C, bar, kW…">
+        </div>
+        <div>
+          <label for="varFrequency">Fréquence (secondes)</label>
+          <input id="varFrequency" type="number" min="1" value="5" required>
+        </div>
+        <button class="btn btn-primary" type="submit">Ajouter la variable</button>
+      </form>
+      <p id="configMessage" class="message" role="status"></p>
+    </section>
+
+    <section class="panel">
+      <h2>Variables configurées</h2>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr><th>Nom</th><th>Adresse</th><th>Unité</th><th>Fréquence</th><th>Action</th></tr>
+          </thead>
+          <tbody id="configTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Écriture d'une variable automate</h2>
+      <p class="muted">
+        L'écriture peut modifier le comportement du procédé.
+        Vérifiez l'adresse, les limites et les autorisations avant validation.
+      </p>
+      <form id="writeForm" class="form-grid">
+        <div>
+          <label for="writeVariable">Variable cible</label>
+          <select id="writeVariable" required></select>
+        </div>
+        <div>
+          <label for="writeValue">Nouvelle valeur</label>
+          <input id="writeValue" required type="number" step="any">
+        </div>
+        <button class="btn btn-danger" type="submit">Écrire sur l'automate</button>
+      </form>
+      <p id="writeMessage" class="message" role="status"></p>
+    </section>
+  </main>
+
+  <script>
+    const API = "/api";
+    let automates = [];
+    let variables = [];
+
+    async function api(path, options = {}) {
+      const response = await fetch(API + path, {
+        credentials: "include",
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          ...options.headers
+        }
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        window.location.href = "index.html";
+        throw new Error("Session expirée ou accès refusé.");
+      }
+
+      const result = response.status === 204 ? null :
+        await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(result?.message || `Erreur HTTP ${response.status}`);
+      }
+      return result;
+    }
+
+    const json = value => JSON.stringify(value);
+
+    async function loadAll() {
+      const [plcData, varData] = await Promise.all([
+        api("/automates"),
+        api("/variables")
+      ]);
+
+      automates = Array.isArray(plcData) ? plcData : plcData.data ?? plcData.automates ?? [];
+      variables = Array.isArray(varData) ? varData : varData.data ?? varData.variables ?? [];
+
+      const plcSelect = document.getElementById("varPlc");
+      plcSelect.replaceChildren();
+      automates.forEach(p => {
+        const o = document.createElement("option");
+        o.value = p.id;
+        o.textContent = p.name ?? p.nom ?? p.ip;
+        plcSelect.appendChild(o);
+      });
+
+      const writeSelect = document.getElementById("writeVariable");
+      writeSelect.replaceChildren();
+      variables.forEach(v => {
+        const o = document.createElement("option");
+        o.value = v.id;
+        o.textContent = v.name ?? v.nom;
+        writeSelect.appendChild(o);
+      });
+
+      const tbody = document.getElementById("configTable");
+      tbody.replaceChildren();
+
+      variables.forEach(v => {
+        const row = document.createElement("tr");
+        [
+          v.name ?? v.nom,
+          v.address ?? v.adresse ?? v.register,
+          v.unit ?? v.unite ?? "",
+          `${v.frequency ?? v.frequence ?? "—"} s`
+        ].forEach(value => {
+          const td = document.createElement("td");
+          td.textContent = value ?? "—";
+          row.appendChild(td);
+        });
+
+        const td = document.createElement("td");
+        const btn = document.createElement("button");
+        btn.className = "btn btn-danger";
+        btn.textContent = "Supprimer";
+        btn.type = "button";
+        btn.addEventListener("click", async () => {
+          if (!confirm("Supprimer cette variable ?")) return;
+          try {
+            await api(`/variables/${encodeURIComponent(v.id)}`, {
+              method: "DELETE"
+            });
+            await loadAll();
+          } catch (e) {
+            alert(e.message);
+          }
+        });
+        td.appendChild(btn);
+        row.appendChild(td);
+        tbody.appendChild(row);
+      });
+    }
+
+    document.getElementById("plcForm").addEventListener("submit", async e => {
+      e.preventDefault();
+      const msg = document.getElementById("configMessage");
+      try {
+        await api("/automates", {
+          method: "POST",
+          body: json({
+            name: document.getElementById("plcName").value,
+            ip: document.getElementById("plcIp").value,
+            port: Number(document.getElementById("plcPort").value),
+            unitId: Number(document.getElementById("plcUnit").value)
+          })
+        });
+        msg.textContent = "Automate enregistré.";
+        e.target.reset();
+        document.getElementById("plcPort").value = 502;
+        document.getElementById("plcUnit").value = 1;
+        await loadAll();
+      } catch (err) {
+        msg.textContent = err.message;
+      }
+    });
+
+    document.getElementById("variableForm").addEventListener("submit", async e => {
+      e.preventDefault();
+      const msg = document.getElementById("configMessage");
+      try {
+        await api("/variables", {
+          method: "POST",
+          body: json({
+            name: document.getElementById("varName").value,
+            automateId: document.getElementById("varPlc").value,
+            address: document.getElementById("varAddress").value,
+            type: document.getElementById("varType").value,
+            unit: document.getElementById("varUnit").value,
+            frequency: Number(document.getElementById("varFrequency").value)
+          })
+        });
+        msg.textContent = "Variable enregistrée.";
+        e.target.reset();
+        document.getElementById("varFrequency").value = 5;
+        await loadAll();
+      } catch (err) {
+        msg.textContent = err.message;
+      }
+    });
+
+    document.getElementById("writeForm").addEventListener("submit", async e => {
+      e.preventDefault();
+      const msg = document.getElementById("writeMessage");
+      const id = document.getElementById("writeVariable").value;
+
+      if (!confirm("Confirmez-vous l'écriture de cette valeur sur l'automate ?")) {
+        return;
+      }
+
+      try {
+        await api(`/variables/${encodeURIComponent(id)}/write`, {
+          method: "POST",
+          body: json({
+            value: Number(document.getElementById("writeValue").value)
+          })
+        });
+        msg.textContent = "Demande d'écriture envoyée avec succès.";
+      } catch (err) {
+        msg.textContent = err.message;
+      }
+    });
+
+    loadAll().catch(err => {
+      document.getElementById("configMessage").textContent = err.message;
+    });
+  </script>
+</body>
+</html>

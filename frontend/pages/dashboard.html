@@ -1,1 +1,223 @@
 
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard | Usine Connectée</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <h2>⚙ Usine Connectée</h2>
+    <a class="active" href="dashboard.html">Tableau de bord</a>
+    <a href="parametres.html">Paramètres</a>
+    <a href="historique.html">Historique</a>
+    <button id="logout" class="btn btn-secondary">Déconnexion</button>
+  </aside>
+
+  <main class="main-content">
+    <header class="page-header">
+      <div>
+        <h1>Supervision industrielle</h1>
+        <p class="muted">État des variables surveillées</p>
+      </div>
+      <span id="connectionStatus" class="status">Connexion…</span>
+    </header>
+
+    <section class="stats-grid">
+      <article class="stat-card">
+        <span>Variables surveillées</span>
+        <strong id="variableCount">—</strong>
+      </article>
+      <article class="stat-card">
+        <span>Automates connectés</span>
+        <strong id="plcCount">—</strong>
+      </article>
+      <article class="stat-card">
+        <span>Dernière actualisation</span>
+        <strong id="lastUpdate">—</strong>
+      </article>
+    </section>
+
+    <section class="panel">
+      <h2>Valeurs actuelles</h2>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Variable</th>
+              <th>Automate</th>
+              <th>Valeur</th>
+              <th>Unité</th>
+              <th>État</th>
+              <th>Horodatage</th>
+            </tr>
+          </thead>
+          <tbody id="variablesTable">
+            <tr><td colspan="6">Chargement des données…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Évolution des mesures</h2>
+      <label for="variableSelect">Variable à afficher</label>
+      <select id="variableSelect"></select>
+      <div class="chart-container">
+        <canvas id="measureChart"></canvas>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const API = "/api";
+    const POLL_INTERVAL = 3000;
+    let variables = [];
+    let chart;
+
+    async function api(url) {
+      const response = await fetch(API + url, {
+        credentials: "include"
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        window.location.href = "index.html";
+        throw new Error("Session expirée.");
+      }
+      if (!response.ok) throw new Error(`Erreur API : ${response.status}`);
+      return response.json();
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById("variablesTable");
+      tbody.replaceChildren();
+
+      if (!variables.length) {
+        tbody.innerHTML = '<tr><td colspan="6">Aucune variable configurée.</td></tr>';
+        return;
+      }
+
+      variables.forEach(v => {
+        const row = document.createElement("tr");
+        const values = [
+          v.name ?? v.nom ?? v.variable,
+          v.automateName ?? v.automate ?? v.ip,
+          v.value ?? v.valeur ?? "—",
+          v.unit ?? v.unite ?? "",
+          v.status ?? v.etat ?? "Inconnu",
+          v.timestamp ?? v.horodatage ?? "—"
+        ];
+
+        values.forEach((value, index) => {
+          const cell = document.createElement("td");
+          cell.textContent = value ?? "—";
+          if (index === 4) {
+            cell.className = String(value).toLowerCase().includes("ok")
+              ? "success-text" : "muted";
+          }
+          row.appendChild(cell);
+        });
+        tbody.appendChild(row);
+      });
+
+      document.getElementById("variableCount").textContent = variables.length;
+      document.getElementById("plcCount").textContent =
+        new Set(variables.map(v => v.automateId ?? v.ip ?? v.automate)
+          .filter(Boolean)).size;
+
+      const select = document.getElementById("variableSelect");
+      const previous = select.value;
+      select.replaceChildren();
+
+      variables.forEach(v => {
+        const option = document.createElement("option");
+        option.value = v.id;
+        option.textContent = v.name ?? v.nom ?? v.variable ?? `Variable ${v.id}`;
+        select.appendChild(option);
+      });
+
+      if ([...select.options].some(o => o.value === previous)) {
+        select.value = previous;
+      }
+    }
+
+    async function loadChart() {
+      const id = document.getElementById("variableSelect").value;
+      if (!id) {
+        if (chart) chart.destroy();
+        chart = null;
+        return;
+      }
+
+      try {
+        const data = await api(
+          `/history?variableId=${encodeURIComponent(id)}&limit=30`
+        );
+        const points = Array.isArray(data) ? data : data.data ?? data.measurements ?? [];
+
+        const labels = points.map(p =>
+          new Date(p.timestamp ?? p.horodatage ?? p.date).toLocaleTimeString()
+        );
+        const values = points.map(p => Number(p.value ?? p.valeur));
+
+        if (chart) chart.destroy();
+        chart = new Chart(document.getElementById("measureChart"), {
+          type: "line",
+          data: {
+            labels,
+            datasets: [{
+              label: "Mesure",
+              data: values,
+              borderColor: "#16a34a",
+              backgroundColor: "rgba(22,163,74,.10)",
+              fill: true,
+              tension: .25
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false
+          }
+        });
+      } catch (error) {
+        console.error("Chargement du graphique :", error);
+      }
+    }
+
+    async function refresh() {
+      try {
+        const data = await api("/variables");
+        variables = Array.isArray(data) ? data : data.data ?? data.variables ?? [];
+        renderTable();
+        document.getElementById("connectionStatus").textContent = "API connectée";
+        document.getElementById("connectionStatus").className = "status online";
+        document.getElementById("lastUpdate").textContent =
+          new Date().toLocaleTimeString();
+        await loadChart();
+      } catch (error) {
+        document.getElementById("connectionStatus").textContent = "Indisponible";
+        document.getElementById("connectionStatus").className = "status offline";
+        console.error(error);
+      }
+    }
+
+    document.getElementById("variableSelect")
+      .addEventListener("change", loadChart);
+
+    document.getElementById("logout").addEventListener("click", async () => {
+      await fetch(`${API}/auth/logout`, {
+        method: "POST",
+        credentials: "include"
+      });
+      window.location.href = "index.html";
+    });
+
+    refresh();
+    setInterval(refresh, POLL_INTERVAL);
+  </script>
+</body>
+</html>
