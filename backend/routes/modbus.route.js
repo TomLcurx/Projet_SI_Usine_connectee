@@ -2,6 +2,34 @@ const express = require("express");
 const ModbusRTU = require("modbus-serial");
 const db = require("../src/config");
 
+// Vérifie que l'utilisateur est connecté
+function verifierConnexion(req, res, next) {
+    if (!req.session?.utilisateur) {
+        return res.status(401).json({
+            error: "Vous devez être connecté."
+        });
+    }
+
+    next();
+}
+
+// Vérifie que l'utilisateur est administrateur
+function verifierAdmin(req, res, next) {
+    if (!req.session?.utilisateur) {
+        return res.status(401).json({
+            error: "Vous devez être connecté."
+        });
+    }
+
+    if (req.session.utilisateur.role !== "admin") {
+        return res.status(403).json({
+            error: "Accès réservé aux administrateurs."
+        });
+    }
+
+    next();
+}
+
 const router = express.Router();
 
 // Récupère les informations de connexion à l'automate.
@@ -38,7 +66,8 @@ async function connecter(automate) {
 
 // GET /api/automates/1/modbus/lecture
 // Exemple : ?type=holding&adresse=100&quantite=4
-router.get("/:id/modbus/lecture", async (req, res) => {
+router.get("/:id/modbus/lecture", verifierConnexion, async (req, res) => {
+    
     let client;
 
     try {
@@ -120,7 +149,7 @@ router.get("/:id/modbus/lecture", async (req, res) => {
 
 // POST /api/automates/1/modbus/ecriture
 // Corps JSON : { "type": "holding", "adresse": 100, "valeur": 42 }
-router.post("/:id/modbus/ecriture", async (req, res) => {
+router.post("/:id/modbus/ecriture", verifierAdmin, async (req, res) => {
     let client;
 
     try {
@@ -164,6 +193,37 @@ router.post("/:id/modbus/ecriture", async (req, res) => {
         if (!automate) {
             return res.status(404).json({
                 error: "Automate introuvable ou inactif"
+            });
+        }
+
+        // Vérifier que la variable autorise l'écriture
+        const [variables] = await db.query(
+            `SELECT id, nom, type_registre, ecriture_autorisee
+            FROM variables
+            WHERE automate_id = ?
+            AND adresse_registre = ?
+            AND actif = TRUE
+            LIMIT 1`,
+            [id, adresse]
+        );
+
+        if (variables.length === 0) {
+            return res.status(403).json({
+                error: "Aucune variable active ne correspond à cette adresse."
+            });
+        }
+
+        const variable = variables[0];
+
+        if (!variable.ecriture_autorisee) {
+            return res.status(403).json({
+                error: "L'écriture n'est pas autorisée pour cette variable."
+            });
+        }
+
+        if (variable.type_registre !== type) {
+            return res.status(400).json({
+                error: "Le type de registre ne correspond pas à la variable."
             });
         }
 
