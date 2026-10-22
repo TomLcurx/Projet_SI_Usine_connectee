@@ -33,9 +33,10 @@ async function lireAutomates() {
 
                 const [variables] = await db.query(
                     `SELECT id, nom, adresse_registre,
-                            type_registre, type_donnee, unite
-                     FROM variables
-                     WHERE automate_id = ? AND actif = TRUE`,
+                            type_registre, type_donnee, unite,
+                            facteur_conversion, offset_conversion
+                    FROM variables
+                    WHERE automate_id = ? AND actif = TRUE`,
                     [automate.id]
                 );
 
@@ -83,19 +84,16 @@ async function lireAutomates() {
                                 );
                         }
 
-                        if (
-                            variable.type_donnee === "int16" &&
-                            valeur > 32767
-                        ) {
+                        // Interprétation des valeurs sur 16 bits
+                        if (variable.type_donnee === "int16" && valeur > 32767) {
                             valeur -= 65536;
                         }
 
-                        if (
-                            variable.type_donnee === "uint16" &&
-                            ["°C", "bar"].includes(variable.unite)
-                        ) {
-                            valeur /= 10;
-                        }
+                        // Application du facteur et de l'offset configurés en base
+                        const facteur = Number(variable.facteur_conversion ?? 1);
+                        const offset = Number(variable.offset_conversion ?? 0);
+
+                        valeur = valeur * facteur + offset;
 
                         await db.query(
                             `INSERT INTO mesures (variable_id, valeur)

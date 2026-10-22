@@ -1,12 +1,10 @@
-
 import asyncio
 import math
 import time
 
 from pymodbus import FramerType
-from pymodbus.simulator import DataType
+from pymodbus.simulator import DataType, SimData, SimDevice
 from pymodbus.server import StartAsyncTcpServer
-from pymodbus.simulator import SimData, SimDevice
 
 
 # Configuration du simulateur
@@ -14,18 +12,23 @@ HOST = "0.0.0.0"
 PORT = 5020
 UNIT_ID = 1
 
-# Adresses des registres Modbus
+# Registres de mesure
 REGISTRE_TEMPERATURE = 100
 REGISTRE_PRESSION = 101
 REGISTRE_VITESSE = 102
 REGISTRE_ETAT = 103
+
+# Plage des registres de commande
+COMMANDE_DEBUT = 110
+COMMANDE_FIN = 119
 
 
 class AutomateSimule:
     def __init__(self):
         self.demarrage = time.time()
 
-        # Déclaration de 200 registres, de 0 à 199
+        # 200 registres disponibles : adresses 0 à 199.
+        # Les registres de commande sont initialisés à zéro.
         registres = SimData(
             address=0,
             count=200,
@@ -33,7 +36,6 @@ class AutomateSimule:
             datatype=DataType.REGISTERS,
         )
 
-        # Appelé lorsqu'un client lit ou écrit des registres
         async def actualiser_registres(
             function_code,
             start_address,
@@ -42,10 +44,17 @@ class AutomateSimule:
             current_registers,
             set_values,
         ):
-            # On actualise uniquement lors d'une lecture
+            # Une écriture est traitée par le simulateur.
+            # On ne remplace jamais les valeurs écrites
+            # par les calculs des mesures.
             if set_values is not None:
+                print(
+                    f"Écriture Modbus : adresse de départ "
+                    f"{start_address}, valeurs {set_values}"
+                )
                 return None
 
+            # Calcul des mesures simulées
             t = time.time() - self.demarrage
 
             temperature = 55 + 15 * math.sin(t / 20)
@@ -53,19 +62,19 @@ class AutomateSimule:
             vitesse = 1450 + 100 * math.sin(t / 8)
             etat = 1
 
-            valeurs = {
+            valeurs_mesures = {
                 REGISTRE_TEMPERATURE: round(temperature * 10),
                 REGISTRE_PRESSION: round(pression * 10),
                 REGISTRE_VITESSE: round(vitesse),
                 REGISTRE_ETAT: etat,
             }
 
-            # Mise à jour des registres demandés
+            # Actualisation uniquement des registres de mesure
             for i in range(len(current_registers)):
                 adresse = start_address + i
 
-                if adresse in valeurs:
-                    current_registers[i] = valeurs[adresse]
+                if adresse in valeurs_mesures:
+                    current_registers[i] = valeurs_mesures[adresse]
 
             print(
                 f"Température : {temperature:.1f} °C | "
@@ -89,8 +98,11 @@ async def main():
     print("Démarrage du simulateur Modbus TCP...")
     print(f"Adresse d'écoute : {HOST}:{PORT}")
     print(f"Identifiant Modbus : {UNIT_ID}")
-    print("Registres simulés : 100 à 103")
-    print("En attente de lectures du backend...")
+    print("Mesures : registres 100 à 103")
+    print(
+        f"Commandes : registres {COMMANDE_DEBUT} "
+        f"à {COMMANDE_FIN}"
+    )
     print("Arrêt : Ctrl+C")
 
     await StartAsyncTcpServer(
