@@ -173,4 +173,4 @@ Si le port 3000 est déjà utilisé :
 - L'API de test est disponible sur le port 3000.
 - L'application complète de supervision nécessitera également le frontend et l'intégration des fonctionnalités métier prévues dans le projet.
 
-FIN DU GUIDE
+*FIN DU GUIDE*
