@@ -75,19 +75,24 @@
             </article>
         </section>
 
+        
         <section class="section-tableau">
             <div class="titre-section">
                 <div>
                     <h2>Mesures en direct</h2>
-                    <p>Les valeurs des variables seront affichées ici.</p>
+                    <p>Suivi en temps réel des variables industrielles</p>
                 </div>
+                <span class="badge-direct">
+                    <span class="point-direct"></span>
+                    Actualisation automatique
+                </span>
             </div>
 
-            <div class="tableau-defaut">
-                <p id="message-mesures">
-                    Chargement des données de supervision...
-                </p>
-            </div>
+            <p id="message-mesures" class="message-mesures">
+                Chargement des mesures...
+            </p>
+
+            <div id="mesures-container" class="grille-mesures"></div>
         </section>
     </main>
 </body>

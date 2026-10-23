@@ -260,19 +260,191 @@ app.use("/api/automates", modbusRoutes);
 app.get("/api/variables", async (req, res) => {
     try {
         const [variables] = await db.query(
-            `SELECT id, automate_id, nom, adresse_registre,
-                    type_registre, type_donnee, unite, actif, date_creation
-             FROM variables
-             ORDER BY automate_id, id`
+            `SELECT
+                v.id,
+                v.automate_id,
+                v.nom,
+                v.adresse_registre,
+                v.type_registre,
+                v.type_donnee,
+                v.unite,
+                v.actif,
+                v.date_creation,
+                (
+                    SELECT m.valeur
+                    FROM mesures m
+                    WHERE m.variable_id = v.id
+                    ORDER BY m.date_mesure DESC, m.id DESC
+                    LIMIT 1
+                ) AS derniere_valeur,
+                (
+                    SELECT m.date_mesure
+                    FROM mesures m
+                    WHERE m.variable_id = v.id
+                    ORDER BY m.date_mesure DESC, m.id DESC
+                    LIMIT 1
+                ) AS date_derniere_mesure
+             FROM variables v
+             ORDER BY v.automate_id, v.id`
         );
 
         res.json(variables);
     } catch (error) {
-        console.error("Erreur lors de la récupération des variables :", error);
+        console.error(
+            "Erreur lors de la récupération des variables :",
+            error
+        );
+
         res.status(500).json({
             error: "Impossible de récupérer les variables"
         });
     }
 });
+
+
+/* =====================================================
+   PRÉFÉRENCES DU TABLEAU DE BORD
+===================================================== */
+
+// Récupérer les préférences de l'utilisateur connecté.
+app.get(
+    "/api/preferences-affichage",
+    verifierConnexion,
+    async (req, res) => {
+        try {
+            const utilisateurId = req.session.utilisateur.id;
+
+            const [preferences] = await db.query(
+                `SELECT
+                    variable_id,
+                    visible,
+                    type_affichage,
+                    ordre_affichage
+                 FROM preferences_affichage
+                 WHERE utilisateur_id = ?
+                 ORDER BY ordre_affichage, variable_id`,
+                [utilisateurId]
+            );
+
+            res.json(preferences);
+        } catch (error) {
+            console.error(
+                "Erreur de récupération des préférences :",
+                error
+            );
+
+            res.status(500).json({
+                error: "Impossible de récupérer les préférences."
+            });
+        }
+    }
+);
+
+// Enregistrer les préférences de l'utilisateur connecté.
+app.put(
+    "/api/preferences-affichage",
+    verifierConnexion,
+    async (req, res) => {
+        const preferences = req.body.preferences;
+        const utilisateurId = req.session.utilisateur.id;
+
+        if (!Array.isArray(preferences)) {
+            return res.status(400).json({
+                error: "Une liste de préférences est requise."
+            });
+        }
+
+        const typesAutorises = [
+            "valeur",
+            "carte",
+            "jauge",
+            "graphique"
+        ];
+
+        const identifiants = new Set();
+
+        for (const preference of preferences) {
+            if (
+                !preference ||
+                !Number.isInteger(Number(preference.variable_id)) ||
+                Number(preference.variable_id) <= 0 ||
+                !Number.isInteger(Number(preference.ordre_affichage)) ||
+                ![true, false, 0, 1].includes(preference.visible) ||
+                !typesAutorises.includes(preference.type_affichage)
+            ) {
+                return res.status(400).json({
+                    error: "Une préférence contient des valeurs invalides."
+                });
+            }
+
+            const variableId = Number(preference.variable_id);
+
+            if (identifiants.has(variableId)) {
+                return res.status(400).json({
+                    error: "Une variable ne peut apparaître qu'une fois."
+                });
+            }
+
+            identifiants.add(variableId);
+        }
+
+        let connexion;
+
+        try {
+            connexion = await db.getConnection();
+            await connexion.beginTransaction();
+
+            for (const preference of preferences) {
+                await connexion.query(
+                    `INSERT INTO preferences_affichage
+                        (
+                            utilisateur_id,
+                            variable_id,
+                            visible,
+                            type_affichage,
+                            ordre_affichage
+                        )
+                     SELECT ?, v.id, ?, ?, ?
+                     FROM variables v
+                     WHERE v.id = ?
+                     ON DUPLICATE KEY UPDATE
+                        visible = VALUES(visible),
+                        type_affichage = VALUES(type_affichage),
+                        ordre_affichage = VALUES(ordre_affichage)`,
+                    [
+                        utilisateurId,
+                        preference.visible ? 1 : 0,
+                        preference.type_affichage,
+                        Number(preference.ordre_affichage),
+                        Number(preference.variable_id)
+                    ]
+                );
+            }
+
+            await connexion.commit();
+
+            res.json({
+                message: "Préférences enregistrées."
+            });
+        } catch (error) {
+            if (connexion) {
+                await connexion.rollback();
+            }
+
+            console.error(
+                "Erreur d'enregistrement des préférences :",
+                error
+            );
+
+            res.status(500).json({
+                error: "Impossible d'enregistrer les préférences."
+            });
+        } finally {
+            if (connexion) {
+                connexion.release();
+            }
+        }
+    }
+);
 
 module.exports = app;
