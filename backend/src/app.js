@@ -301,12 +301,82 @@ app.get("/api/variables", async (req, res) => {
     }
 });
 
-
 /* =====================================================
-   PRÉFÉRENCES DU TABLEAU DE BORD
+   HISTORIQUE DES MESURES D'UNE VARIABLE
 ===================================================== */
 
-// Récupérer les préférences de l'utilisateur connecté.
+app.get(
+    "/api/variables/:id/mesures",
+    verifierConnexion,
+    async (req, res) => {
+        const variableId = Number(req.params.id);
+        const periodeMinutes = Number(req.query.periode_minutes ?? 60);
+
+        if (
+            !Number.isInteger(variableId) ||
+            variableId <= 0 ||
+            !Number.isInteger(periodeMinutes) ||
+            periodeMinutes < 1 ||
+            periodeMinutes > 525600
+        ) {
+            return res.status(400).json({
+                error: "Identifiant ou période invalide."
+            });
+        }
+
+        try {
+            const [variables] = await db.query(
+                "SELECT id FROM variables WHERE id = ?",
+                [variableId]
+            );
+
+            if (variables.length === 0) {
+                return res.status(404).json({
+                    error: "Variable introuvable."
+                });
+            }
+
+            const dateDebut = new Date(
+                Date.now() - periodeMinutes * 60 * 1000
+            );
+
+            const [mesures] = await db.query(
+                `SELECT valeur, date_mesure
+                 FROM mesures
+                 WHERE variable_id = ?
+                   AND date_mesure >= ?
+                 ORDER BY date_mesure ASC
+                 LIMIT 2000`,
+                [variableId, dateDebut]
+            );
+
+            res.json(mesures);
+        } catch (error) {
+            console.error(
+                "Erreur de récupération de l'historique :",
+                error
+            );
+
+            res.status(500).json({
+                error: "Impossible de récupérer les mesures historiques."
+            });
+        }
+    }
+);
+
+/* =====================================================
+   AFFICHAGES PERSONNALISÉS DU TABLEAU DE BORD
+===================================================== */
+
+// Types d'affichage autorisés
+const typesAffichageAutorises = [
+    "valeur",
+    "carte",
+    "jauge",
+    "graphique"
+];
+
+// Récupérer tous les affichages de l'utilisateur connecté
 app.get(
     "/api/preferences-affichage",
     verifierConnexion,
@@ -314,135 +384,283 @@ app.get(
         try {
             const utilisateurId = req.session.utilisateur.id;
 
-            const [preferences] = await db.query(
+            const [affichages] = await db.query(
                 `SELECT
-                    variable_id,
-                    visible,
-                    type_affichage,
-                    ordre_affichage
-                 FROM preferences_affichage
-                 WHERE utilisateur_id = ?
-                 ORDER BY ordre_affichage, variable_id`,
+                    p.id,
+                    p.variable_id,
+                    p.titre,
+                    p.visible,
+                    p.type_affichage,
+                    p.ordre_affichage,
+                    p.periode_minutes,
+                    v.nom AS nom_variable,
+                    v.unite,
+                    v.automate_id
+                 FROM preferences_affichage p
+                 INNER JOIN variables v ON v.id = p.variable_id
+                 WHERE p.utilisateur_id = ?
+                 ORDER BY p.ordre_affichage, p.id`,
                 [utilisateurId]
             );
 
-            res.json(preferences);
+            res.json(affichages);
         } catch (error) {
             console.error(
-                "Erreur de récupération des préférences :",
+                "Erreur de récupération des affichages :",
                 error
             );
 
             res.status(500).json({
-                error: "Impossible de récupérer les préférences."
+                error: "Impossible de récupérer les affichages."
             });
         }
     }
 );
 
-// Enregistrer les préférences de l'utilisateur connecté.
-app.put(
+// Créer un nouvel affichage
+app.post(
     "/api/preferences-affichage",
     verifierConnexion,
     async (req, res) => {
-        const preferences = req.body.preferences;
-        const utilisateurId = req.session.utilisateur.id;
+        const {
+            variable_id,
+            titre,
+            visible = true,
+            type_affichage = "carte",
+            ordre_affichage = 0,
+            periode_minutes = 60
+        } = req.body;
 
-        if (!Array.isArray(preferences)) {
+        const variableId = Number(variable_id);
+        const ordre = Number(ordre_affichage);
+        const periode = Number(periode_minutes);
+
+        if (
+            !Number.isInteger(variableId) ||
+            variableId <= 0 ||
+            !typesAffichageAutorises.includes(type_affichage) ||
+            ![true, false, 0, 1].includes(visible) ||
+            !Number.isInteger(ordre) ||
+            ordre < 0 ||
+            !Number.isInteger(periode) ||
+            periode < 1 ||
+            periode > 525600 ||
+            (titre != null &&
+                (typeof titre !== "string" ||
+                 titre.trim().length > 100))
+        ) {
             return res.status(400).json({
-                error: "Une liste de préférences est requise."
+                error: "Les paramètres de l'affichage sont invalides."
             });
         }
-
-        const typesAutorises = [
-            "valeur",
-            "carte",
-            "jauge",
-            "graphique"
-        ];
-
-        const identifiants = new Set();
-
-        for (const preference of preferences) {
-            if (
-                !preference ||
-                !Number.isInteger(Number(preference.variable_id)) ||
-                Number(preference.variable_id) <= 0 ||
-                !Number.isInteger(Number(preference.ordre_affichage)) ||
-                ![true, false, 0, 1].includes(preference.visible) ||
-                !typesAutorises.includes(preference.type_affichage)
-            ) {
-                return res.status(400).json({
-                    error: "Une préférence contient des valeurs invalides."
-                });
-            }
-
-            const variableId = Number(preference.variable_id);
-
-            if (identifiants.has(variableId)) {
-                return res.status(400).json({
-                    error: "Une variable ne peut apparaître qu'une fois."
-                });
-            }
-
-            identifiants.add(variableId);
-        }
-
-        let connexion;
 
         try {
-            connexion = await db.getConnection();
-            await connexion.beginTransaction();
+            const [resultat] = await db.query(
+                `INSERT INTO preferences_affichage
+                    (
+                        utilisateur_id,
+                        variable_id,
+                        titre,
+                        visible,
+                        type_affichage,
+                        ordre_affichage,
+                        periode_minutes
+                    )
+                 SELECT ?, id, ?, ?, ?, ?, ?
+                 FROM variables
+                 WHERE id = ?`,
+                [
+                    req.session.utilisateur.id,
+                    titre?.trim() || null,
+                    visible ? 1 : 0,
+                    type_affichage,
+                    ordre,
+                    periode,
+                    variableId
+                ]
+            );
 
-            for (const preference of preferences) {
-                await connexion.query(
-                    `INSERT INTO preferences_affichage
-                        (
-                            utilisateur_id,
-                            variable_id,
-                            visible,
-                            type_affichage,
-                            ordre_affichage
-                        )
-                     SELECT ?, v.id, ?, ?, ?
-                     FROM variables v
-                     WHERE v.id = ?
-                     ON DUPLICATE KEY UPDATE
-                        visible = VALUES(visible),
-                        type_affichage = VALUES(type_affichage),
-                        ordre_affichage = VALUES(ordre_affichage)`,
-                    [
-                        utilisateurId,
-                        preference.visible ? 1 : 0,
-                        preference.type_affichage,
-                        Number(preference.ordre_affichage),
-                        Number(preference.variable_id)
-                    ]
-                );
+            if (resultat.affectedRows === 0) {
+                return res.status(404).json({
+                    error: "La variable demandée n'existe pas."
+                });
             }
 
-            await connexion.commit();
-
-            res.json({
-                message: "Préférences enregistrées."
+            res.status(201).json({
+                message: "Affichage créé avec succès.",
+                id: resultat.insertId
             });
         } catch (error) {
-            if (connexion) {
-                await connexion.rollback();
-            }
-
             console.error(
-                "Erreur d'enregistrement des préférences :",
+                "Erreur de création de l'affichage :",
                 error
             );
 
             res.status(500).json({
-                error: "Impossible d'enregistrer les préférences."
+                error: "Impossible de créer l'affichage."
             });
-        } finally {
-            if (connexion) {
-                connexion.release();
+        }
+    }
+);
+
+// Modifier un affichage existant
+app.put(
+    "/api/preferences-affichage/:id",
+    verifierConnexion,
+    async (req, res) => {
+        const affichageId = Number(req.params.id);
+
+        if (!Number.isInteger(affichageId) || affichageId <= 0) {
+            return res.status(400).json({
+                error: "Identifiant d'affichage invalide."
+            });
+        }
+
+        const {
+            variable_id,
+            titre,
+            visible,
+            type_affichage,
+            ordre_affichage,
+            periode_minutes
+        } = req.body;
+
+        const variableId = Number(variable_id);
+        const ordre = Number(ordre_affichage);
+        const periode = Number(periode_minutes);
+
+        if (
+            !Number.isInteger(variableId) ||
+            variableId <= 0 ||
+            !typesAffichageAutorises.includes(type_affichage) ||
+            ![true, false, 0, 1].includes(visible) ||
+            !Number.isInteger(ordre) ||
+            ordre < 0 ||
+            !Number.isInteger(periode) ||
+            periode < 1 ||
+            periode > 525600 ||
+            (titre != null &&
+                (typeof titre !== "string" ||
+                 titre.trim().length > 100))
+        ) {
+            return res.status(400).json({
+                error: "Les paramètres de l'affichage sont invalides."
+            });
+        }
+
+        try {
+            const [resultat] = await db.query(
+                `UPDATE preferences_affichage p
+                 INNER JOIN variables v ON v.id = ?
+                 SET
+                    p.variable_id = v.id,
+                    p.titre = ?,
+                    p.visible = ?,
+                    p.type_affichage = ?,
+                    p.ordre_affichage = ?,
+                    p.periode_minutes = ?
+                 WHERE p.id = ?
+                   AND p.utilisateur_id = ?`,
+                [
+                    variableId,
+                    titre?.trim() || null,
+                    visible ? 1 : 0,
+                    type_affichage,
+                    ordre,
+                    periode,
+                    affichageId,
+                    req.session.utilisateur.id
+                ]
+            );
+
+            if (resultat.affectedRows === 0) {
+                const [existants] = await db.query(
+                    `SELECT id
+                     FROM preferences_affichage
+                     WHERE id = ?
+                       AND utilisateur_id = ?`,
+                    [
+                        affichageId,
+                        req.session.utilisateur.id
+                    ]
+                );
+
+                if (existants.length === 0) {
+                    return res.status(404).json({
+                        error: "Affichage introuvable."
+                    });
+                }
+
+                const [variables] = await db.query(
+                    "SELECT id FROM variables WHERE id = ?",
+                    [variableId]
+                );
+
+                if (variables.length === 0) {
+                    return res.status(404).json({
+                        error: "La variable demandée n'existe pas."
+                    });
+                }
             }
+
+            res.json({
+                message: "Affichage modifié avec succès."
+            });
+        } catch (error) {
+            console.error(
+                "Erreur de modification de l'affichage :",
+                error
+            );
+
+            res.status(500).json({
+                error: "Impossible de modifier l'affichage."
+            });
+        }
+    }
+);
+
+// Supprimer un affichage sans supprimer ses mesures
+app.delete(
+    "/api/preferences-affichage/:id",
+    verifierConnexion,
+    async (req, res) => {
+        const affichageId = Number(req.params.id);
+
+        if (!Number.isInteger(affichageId) || affichageId <= 0) {
+            return res.status(400).json({
+                error: "Identifiant d'affichage invalide."
+            });
+        }
+
+        try {
+            const [resultat] = await db.query(
+                `DELETE FROM preferences_affichage
+                 WHERE id = ?
+                   AND utilisateur_id = ?`,
+                [
+                    affichageId,
+                    req.session.utilisateur.id
+                ]
+            );
+
+            if (resultat.affectedRows === 0) {
+                return res.status(404).json({
+                    error: "Affichage introuvable."
+                });
+            }
+
+            res.json({
+                message: "Affichage supprimé avec succès."
+            });
+        } catch (error) {
+            console.error(
+                "Erreur de suppression de l'affichage :",
+                error
+            );
+
+            res.status(500).json({
+                error: "Impossible de supprimer l'affichage."
+            });
         }
     }
 );

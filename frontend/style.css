@@ -541,3 +541,85 @@ form select:focus {
     }
 }
 
+/* Alignement des boutons du formulaire de personnalisation */
+.formulaire-affichage .actions-parametres {
+    display: flex;
+    align-items: stretch;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.formulaire-affichage .actions-parametres button {
+    min-height: 42px;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.2;
+}
+
+
+/* ==========================================
+   AFFICHAGES PERSONNALISÉS DU TABLEAU DE BORD
+========================================== */
+
+.affichage-valeur,
+.affichage-carte,
+.affichage-jauge,
+.affichage-graphique {
+    min-width: 0;
+}
+
+.affichage-valeur .valeur-mesure,
+.affichage-carte .valeur-mesure,
+.affichage-jauge .valeur-mesure,
+.affichage-graphique .valeur-mesure {
+    display: block;
+    margin: 12px 0;
+    overflow-wrap: anywhere;
+}
+
+.affichage-graphique {
+    grid-column: 1 / -1;
+}
+
+.graphique-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 300px;
+    margin: 12px 0;
+    overflow: visible;
+}
+
+.legende-graphique,
+.legende-jauge {
+    display: block;
+    margin-top: 8px;
+    font-size: 0.85rem;
+    opacity: 0.8;
+}
+
+.jauge-zone {
+    margin: 18px 0 10px;
+}
+
+.jauge-barre {
+    height: 16px;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #e5e7eb;
+}
+
+.jauge-remplissage {
+    height: 100%;
+    width: 0%;
+    border-radius: inherit;
+    background: #2563eb;
+    transition: width 0.3s ease;
+}
+
+.affichage-graphique .message {
+    margin-top: 12px;
+}

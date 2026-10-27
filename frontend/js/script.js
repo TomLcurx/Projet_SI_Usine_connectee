@@ -262,16 +262,16 @@ async function initialiserDashboard() {
         console.error("Erreur API :", erreur);
     }
 
-    // Variables configurées.
-
-    // Variables configurées et dernières mesures
+    
+    // Affichages personnalisés du tableau de bord
     const mesuresContainer = document.querySelector("#mesures-container");
 
     async function actualiserMesures() {
         try {
-            const variables = await envoyerRequete(
-                `/api/variables`
-            );
+            const [variables, preferences] = await Promise.all([
+                envoyerRequete("/api/variables"),
+                envoyerRequete("/api/preferences-affichage")
+            ]);
 
             if (nombreVariables) {
                 nombreVariables.textContent = variables.length;
@@ -279,78 +279,278 @@ async function initialiserDashboard() {
 
             if (!mesuresContainer) return;
 
-            if (variables.length === 0) {
-                mesuresContainer.replaceChildren();
+            const variablesParId = new Map(
+                variables.map(variable => [
+                    Number(variable.id),
+                    variable
+                ])
+            );
 
-                if (messageMesures) {
-                    messageMesures.textContent =
-                        "Aucune variable n'est configurée pour le moment.";
-                }
+            const affichagesVisibles = preferences
+                .filter(affichage => Boolean(affichage.visible))
+                .sort((a, b) =>
+                    Number(a.ordre_affichage) - Number(b.ordre_affichage) ||
+                    Number(a.id) - Number(b.id)
+                );
 
+            mesuresContainer.replaceChildren();
+
+            if (affichagesVisibles.length === 0) {
+                afficherMessage(
+                    messageMesures,
+                    preferences.length === 0
+                        ? "Aucun affichage configuré. Rendez-vous dans Personnalisation pour en créer."
+                        : "Tous les affichages sont masqués. Modifiez leur visibilité dans Personnalisation."
+                );
                 return;
             }
 
-            if (messageMesures) {
-                messageMesures.textContent =
-                    "Les mesures sont actualisées automatiquement.";
-            }
+            afficherMessage(
+                messageMesures,
+                "Affichages personnalisés · actualisation automatique"
+            );
 
-            // Construire les cartes à partir des variables reçues.
-            const fragment = document.createDocumentFragment();
+            for (const affichage of affichagesVisibles) {
+                const variable = variablesParId.get(
+                    Number(affichage.variable_id)
+                );
 
-            variables.forEach((variable) => {
+                if (!variable) continue;
+
                 const carte = document.createElement("article");
                 carte.className = "carte-mesure";
 
                 const titre = document.createElement("h3");
-                titre.textContent = variable.nom;
+                titre.textContent =
+                    affichage.titre?.trim() ||
+                    affichage.nom_variable ||
+                    variable.nom;
 
                 const valeur = document.createElement("strong");
                 valeur.className = "valeur-mesure";
 
-                const unite = variable.unite || "";
+                
                 const derniereValeur = variable.derniere_valeur;
+                const unite = variable.unite || "";
 
-                if (
-                    derniereValeur === null ||
-                    derniereValeur === undefined
-                ) {
-                    valeur.textContent = "En attente...";
-                } else {
-                    valeur.textContent =
-                        `${Number(derniereValeur).toLocaleString("fr-FR", {
-                            maximumFractionDigits: 1
-                        })}${unite ? ` ${unite}` : ""}`;
+                const valeurDisponible =
+                    derniereValeur !== null &&
+                    derniereValeur !== undefined &&
+                    Number.isFinite(Number(derniereValeur));
+
+                valeur.textContent = valeurDisponible
+                    ? `${Number(derniereValeur).toLocaleString("fr-FR", {
+                        maximumFractionDigits: 2
+                    })}${unite ? ` ${unite}` : ""}`
+                    : "En attente…";
+
+                carte.append(titre, valeur);
+
+                const type = affichage.type_affichage;
+
+                if (type === "valeur") {
+                    carte.classList.add("affichage-valeur");
                 }
 
-                const date = document.createElement("small");
-                date.className = "date-mesure";
+                if (type === "carte") {
+                    carte.classList.add("affichage-carte");
 
-                date.textContent = variable.date_derniere_mesure
-                    ? `Dernière mesure : ${new Date(
-                        variable.date_derniere_mesure
-                    ).toLocaleString("fr-FR")}`
-                    : "Aucune mesure reçue";
+                    const date = document.createElement("small");
+                    date.className = "date-mesure";
+                    date.textContent = variable.date_derniere_mesure
+                        ? `Dernière mesure : ${new Date(
+                            variable.date_derniere_mesure
+                        ).toLocaleString("fr-FR")}`
+                        : "Aucune mesure reçue";
 
-                carte.append(titre, valeur, date);
-                fragment.appendChild(carte);
-            });
+                    carte.appendChild(date);
+                }
 
-            // Remplacer les anciennes cartes par les nouvelles.
-            mesuresContainer.replaceChildren(fragment);
+                if (type === "jauge") {
+                    carte.classList.add("affichage-jauge");
 
-        } catch (erreur) {
-            if (messageMesures) {
-                messageMesures.textContent =
-                    "Impossible de charger les dernières mesures.";
+                    const zoneJauge = document.createElement("div");
+                    zoneJauge.className = "jauge-zone";
+
+                    const barre = document.createElement("div");
+                    barre.className = "jauge-barre";
+
+                    const remplissage = document.createElement("div");
+                    remplissage.className = "jauge-remplissage";
+
+                    barre.appendChild(remplissage);
+                    zoneJauge.appendChild(barre);
+
+                    const legende = document.createElement("small");
+                    legende.className = "legende-jauge";
+                    legende.textContent =
+                        "Échelle indicative basée sur les mesures historiques";
+
+                    carte.append(zoneJauge, legende);
+
+                    try {
+                        const historique = await envoyerRequete(
+                            `/api/variables/${variable.id}/mesures?periode_minutes=${Number(affichage.periode_minutes) || 60}`
+                        );
+
+                        const valeursHistoriques = historique
+                            .map(m => Number(m.valeur))
+                            .filter(Number.isFinite);
+
+                        if (valeurDisponible && valeursHistoriques.length > 0) {
+                            let min = Math.min(...valeursHistoriques);
+                            let max = Math.max(...valeursHistoriques);
+
+                            if (min === max) {
+                                const marge = Math.abs(min) * 0.2 || 1;
+                                min -= marge;
+                                max += marge;
+                            }
+
+                            const pourcentage = Math.max(
+                                0,
+                                Math.min(
+                                    100,
+                                    (Number(derniereValeur) - min) /
+                                    (max - min) * 100
+                                )
+                            );
+
+                            remplissage.style.width = `${pourcentage}%`;
+                            legende.textContent =
+                                `Min. ${min.toLocaleString("fr-FR", {
+                                    maximumFractionDigits: 2
+                                })} · Max. ${max.toLocaleString("fr-FR", {
+                                    maximumFractionDigits: 2
+                                })}`;
+                        } else {
+                            remplissage.style.width = "0%";
+                            legende.textContent =
+                                "En attente de mesures historiques";
+                        }
+                    } catch (erreur) {
+                        legende.textContent =
+                            "Historique indisponible pour cette jauge";
+                        console.error("Erreur de jauge :", erreur);
+                    }
+                }
+
+                if (type === "graphique") {
+                    carte.classList.add("affichage-graphique");
+
+                    const sousTitre = document.createElement("small");
+                    sousTitre.textContent =
+                        `Historique des ${affichage.periode_minutes} dernières minutes`;
+                    carte.appendChild(sousTitre);
+
+                    try {
+                        const historique = await envoyerRequete(
+                            `/api/variables/${variable.id}/mesures?periode_minutes=${Number(affichage.periode_minutes) || 60}`
+                        );
+
+                        const points = historique
+                            .map(m => ({
+                                valeur: Number(m.valeur),
+                                date: m.date_mesure
+                            }))
+                            .filter(p => Number.isFinite(p.valeur));
+
+                        if (points.length < 2) {
+                            const message = document.createElement("p");
+                            message.className = "message";
+                            message.textContent =
+                                "Pas assez de mesures pour tracer le graphique.";
+                            carte.appendChild(message);
+                        } else {
+                            const svgNS = "http://www.w3.org/2000/svg";
+                            const svg = document.createElementNS(svgNS, "svg");
+
+                            svg.setAttribute("viewBox", "0 0 600 220");
+                            svg.setAttribute("role", "img");
+                            svg.setAttribute(
+                                "aria-label",
+                                `Évolution de ${titre.textContent}`
+                            );
+                            svg.classList.add("graphique-svg");
+
+                            const valeurs = points.map(p => p.valeur);
+                            let min = Math.min(...valeurs);
+                            let max = Math.max(...valeurs);
+
+                            if (min === max) {
+                                const marge = Math.abs(min) * 0.1 || 1;
+                                min -= marge;
+                                max += marge;
+                            }
+
+                            const margeX = 12;
+                            const margeY = 12;
+                            const largeur = 600 - margeX * 2;
+                            const hauteur = 220 - margeY * 2;
+
+                            const coordonnees = points.map((point, index) => {
+                                const x = margeX +
+                                    index / (points.length - 1) * largeur;
+
+                                const y = margeY + hauteur -
+                                    (point.valeur - min) / (max - min) * hauteur;
+
+                                return `${x},${y}`;
+                            }).join(" ");
+
+                            const ligne = document.createElementNS(
+                                svgNS,
+                                "polyline"
+                            );
+
+                            ligne.setAttribute("points", coordonnees);
+                            ligne.setAttribute("fill", "none");
+                            ligne.setAttribute("stroke", "currentColor");
+                            ligne.setAttribute("stroke-width", "3");
+                            ligne.setAttribute("stroke-linejoin", "round");
+                            ligne.setAttribute("stroke-linecap", "round");
+
+                            svg.appendChild(ligne);
+                            carte.appendChild(svg);
+
+                            const legende = document.createElement("small");
+                            legende.className = "legende-graphique";
+                            legende.textContent =
+                                `${points.length} points · Min. ${min.toLocaleString("fr-FR", {
+                                    maximumFractionDigits: 2
+                                })} · Max. ${max.toLocaleString("fr-FR", {
+                                    maximumFractionDigits: 2
+                                })}`;
+
+                            carte.appendChild(legende);
+                        }
+                    } catch (erreur) {
+                        const message = document.createElement("p");
+                        message.className = "message erreur";
+                        message.textContent = "Impossible de charger le graphique.";
+                        carte.appendChild(message);
+
+                        console.error("Erreur de graphique :", erreur);
+                    }
+                }
+
+                mesuresContainer.appendChild(carte);
             }
+        } catch (erreur) {
+            afficherMessage(
+                messageMesures,
+                "Impossible de charger les affichages. Vérifiez votre connexion.",
+                true
+            );
 
-            console.error("Erreur de chargement des mesures :", erreur);
+            console.error("Erreur de chargement du tableau de bord :", erreur);
         }
     }
 
-    // Premier chargement, puis actualisation toutes les 2 secondes.
     await actualiserMesures();
+
+    // Le backend lit les automates plus fréquemment.
+    // Inutile de recharger les graphiques à chaque lecture Modbus.
     setInterval(actualiserMesures, 2000);
 
     // Le nombre d'automates sera relié à l'API dans une prochaine étape.
@@ -633,5 +833,300 @@ async function initialiserPageParametres() {
         message.textContent =
             "Impossible de charger les paramètres : " +
             erreur.message;
+    }
+}
+
+/* =====================================================
+   PAGE PERSONNALISATION : AFFICHAGES INDÉPENDANTS
+===================================================== */
+
+const formulaireAffichage = document.querySelector("#form-affichage");
+
+if (formulaireAffichage) {
+    initialiserPersonnalisation();
+}
+
+async function initialiserPersonnalisation() {
+    const champId = document.querySelector("#affichage-id");
+    const champTitre = document.querySelector("#affichage-titre");
+    const champVariable = document.querySelector("#affichage-variable");
+    const champType = document.querySelector("#affichage-type");
+    const champPeriode = document.querySelector("#affichage-periode");
+    const champOrdre = document.querySelector("#affichage-ordre");
+    const champVisible = document.querySelector("#affichage-visible");
+
+    const titreFormulaire = document.querySelector("#titre-formulaire-affichage");
+    const boutonSauvegarder = document.querySelector("#bouton-sauvegarder-affichage");
+    const boutonAnnuler = document.querySelector("#bouton-annuler-modification");
+    const messageFormulaire = document.querySelector("#message-affichage");
+    const messageListe = document.querySelector("#message-liste-affichages");
+    const liste = document.querySelector("#liste-affichages");
+
+    let affichages = [];
+
+    try {
+        const session = await envoyerRequete("/api/session");
+        const utilisateur = session.utilisateur;
+
+        document.querySelector("#nom-utilisateur").textContent =
+            utilisateur.identifiant;
+
+        const roles = {
+            admin: "Administrateur",
+            operateur: "Opérateur",
+            utilisateur: "Utilisateur"
+        };
+
+        document.querySelector("#role-utilisateur").textContent =
+            roles[utilisateur.role] || utilisateur.role;
+
+        const variables = await envoyerRequete("/api/variables");
+
+        champVariable.replaceChildren();
+
+        if (variables.length === 0) {
+            champVariable.add(new Option("Aucune variable disponible", ""));
+            champVariable.disabled = true;
+            boutonSauvegarder.disabled = true;
+
+            afficherMessage(
+                messageFormulaire,
+                "Configure d'abord un automate et une variable dans Paramètres.",
+                true
+            );
+        } else {
+            champVariable.add(new Option("Choisir une variable", ""));
+
+            variables.forEach(variable => {
+                const option = new Option(
+                    `${variable.nom} — registre ${variable.adresse_registre}`,
+                    String(variable.id)
+                );
+
+                champVariable.add(option);
+            });
+        }
+
+        async function chargerAffichages() {
+            try {
+                affichages = await envoyerRequete(
+                    "/api/preferences-affichage"
+                );
+
+                liste.replaceChildren();
+
+                if (affichages.length === 0) {
+                    afficherMessage(
+                        messageListe,
+                        "Aucun affichage pour le moment. Crée ton premier affichage ci-dessus."
+                    );
+                    return;
+                }
+
+                afficherMessage(
+                    messageListe,
+                    `${affichages.length} affichage(s) configuré(s).`
+                );
+
+                affichages.forEach(affichage => {
+                    const carte = document.createElement("article");
+                    carte.className = "ligne-preference";
+
+                    const infos = document.createElement("div");
+                    infos.className = "infos-variable";
+
+                    const titre = document.createElement("strong");
+                    titre.textContent =
+                        affichage.titre ||
+                        affichage.nom_variable;
+
+                    const details = document.createElement("small");
+                    details.textContent =
+                        `Variable : ${affichage.nom_variable} · ` +
+                        `Type : ${affichage.type_affichage} · ` +
+                        `Période : ${affichage.periode_minutes} min · ` +
+                        `Ordre : ${affichage.ordre_affichage} · ` +
+                        (affichage.visible ? "Visible" : "Masqué");
+
+                    infos.append(titre, details);
+
+                    const actions = document.createElement("div");
+                    actions.className = "actions-parametres";
+
+                    const boutonModifier = document.createElement("button");
+                    boutonModifier.type = "button";
+                    boutonModifier.className = "bouton-secondaire";
+                    boutonModifier.textContent = "Modifier";
+
+                    boutonModifier.addEventListener("click", () => {
+                        champId.value = affichage.id;
+                        champTitre.value = affichage.titre || "";
+                        champVariable.value = String(affichage.variable_id);
+                        champType.value = affichage.type_affichage;
+                        champPeriode.value = affichage.periode_minutes;
+                        champOrdre.value = affichage.ordre_affichage;
+                        champVisible.checked = Boolean(affichage.visible);
+
+                        titreFormulaire.textContent = "Modifier un affichage";
+                        boutonSauvegarder.textContent = "Enregistrer les modifications";
+                        boutonAnnuler.hidden = false;
+
+                        afficherMessage(messageFormulaire, "");
+                        formulaireAffichage.scrollIntoView({
+                            behavior: "smooth",
+                            block: "start"
+                        });
+                    });
+
+                    const boutonSupprimer = document.createElement("button");
+                    boutonSupprimer.type = "button";
+                    boutonSupprimer.className = "bouton-secondaire";
+                    boutonSupprimer.textContent = "Supprimer";
+
+                    boutonSupprimer.addEventListener("click", async () => {
+                        if (!confirm(
+                            `Supprimer l'affichage « ${
+                                affichage.titre || affichage.nom_variable
+                            } » ? Les mesures historiques seront conservées.`
+                        )) {
+                            return;
+                        }
+
+                        boutonSupprimer.disabled = true;
+
+                        try {
+                            await envoyerRequete(
+                                `/api/preferences-affichage/${affichage.id}`,
+                                { method: "DELETE" }
+                            );
+
+                            if (champId.value === String(affichage.id)) {
+                                reinitialiserFormulaire();
+                            }
+
+                            await chargerAffichages();
+                        } catch (erreur) {
+                            afficherMessage(
+                                messageListe,
+                                erreur.message,
+                                true
+                            );
+                            boutonSupprimer.disabled = false;
+                        }
+                    });
+
+                    actions.append(boutonModifier, boutonSupprimer);
+                    carte.append(infos, actions);
+                    liste.appendChild(carte);
+                });
+            } catch (erreur) {
+                afficherMessage(
+                    messageListe,
+                    `Impossible de charger les affichages : ${erreur.message}`,
+                    true
+                );
+            }
+        }
+
+        function reinitialiserFormulaire() {
+            formulaireAffichage.reset();
+            champId.value = "";
+            champPeriode.value = "60";
+            champOrdre.value = String(affichages.length + 1);
+            champVisible.checked = true;
+
+            titreFormulaire.textContent = "Nouvel affichage";
+            boutonSauvegarder.textContent = "Créer l'affichage";
+            boutonAnnuler.hidden = true;
+
+            afficherMessage(messageFormulaire, "");
+        }
+
+        boutonAnnuler.addEventListener("click", reinitialiserFormulaire);
+
+        formulaireAffichage.addEventListener("submit", async event => {
+            event.preventDefault();
+
+            const variableId = Number(champVariable.value);
+            const periode = Number(champPeriode.value);
+            const ordre = Number(champOrdre.value);
+
+            if (!variableId) {
+                afficherMessage(
+                    messageFormulaire,
+                    "Choisis une variable.",
+                    true
+                );
+                return;
+            }
+
+            if (
+                !Number.isInteger(periode) ||
+                periode < 1 ||
+                periode > 525600 ||
+                !Number.isInteger(ordre) ||
+                ordre < 0
+            ) {
+                afficherMessage(
+                    messageFormulaire,
+                    "La période doit être comprise entre 1 et 525600 minutes et l'ordre doit être un entier positif ou nul.",
+                    true
+                );
+                return;
+            }
+
+            const donnees = {
+                variable_id: variableId,
+                titre: champTitre.value.trim() || null,
+                type_affichage: champType.value,
+                periode_minutes: periode,
+                ordre_affichage: ordre,
+                visible: champVisible.checked
+            };
+
+            const id = champId.value;
+            const url = id
+                ? `/api/preferences-affichage/${id}`
+                : "/api/preferences-affichage";
+
+            boutonSauvegarder.disabled = true;
+            afficherMessage(messageFormulaire, "Enregistrement en cours...");
+
+            try {
+                const resultat = await envoyerRequete(url, {
+                    method: id ? "PUT" : "POST",
+                    body: JSON.stringify(donnees)
+                });
+
+                afficherMessage(
+                    messageFormulaire,
+                    resultat.message || "Affichage enregistré."
+                );
+
+                reinitialiserFormulaire();
+                await chargerAffichages();
+            } catch (erreur) {
+                afficherMessage(
+                    messageFormulaire,
+                    `Erreur : ${erreur.message}`,
+                    true
+                );
+            } finally {
+                boutonSauvegarder.disabled = false;
+            }
+        });
+
+        await chargerAffichages();
+
+    } catch (erreur) {
+        afficherMessage(
+            messageFormulaire,
+            `Impossible de charger la page : ${erreur.message}`,
+            true
+        );
+
+        if (erreur.message.includes("401")) {
+            window.location.replace("../index.html");
+        }
     }
 }

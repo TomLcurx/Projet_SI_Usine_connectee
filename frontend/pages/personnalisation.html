@@ -1,0 +1,153 @@
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personnalisation - Usine Connectée</title>
+    <link rel="stylesheet" href="../style.css">
+    <script src="../js/script.js" defer></script>
+</head>
+<body class="page-application">
+    <aside class="barre-laterale">
+        <div class="logo-usine">
+            <span>UC</span>
+            <div>
+                <strong>Usine Connectée</strong>
+                <small>Supervision industrielle</small>
+            </div>
+        </div>
+
+        <nav>
+            <a class="lien-navigation" href="dashboard.html">Tableau de bord</a>
+            <a class="lien-navigation" href="historique.html">Historique</a>
+            <a class="lien-navigation actif" href="personnalisation.html">Personnalisation</a>
+            <a class="lien-navigation" href="parametres.html">Paramètres</a>
+        </nav>
+
+        <div class="bas-sidebar">
+            <span>Projet étudiant</span>
+            <small>UniLaSalle Amiens</small>
+        </div>
+    </aside>
+
+    <main class="contenu-principal">
+        <header class="barre-superieure">
+            <div>
+                <h1>Personnalisation</h1>
+                <p>Configurez les affichages de votre tableau de bord</p>
+            </div>
+
+            <div class="actions-haut">
+                <div class="profil-utilisateur">
+                    <span class="icone-utilisateur">U</span>
+                    <div>
+                        <strong id="nom-utilisateur">Utilisateur</strong>
+                        <small id="role-utilisateur">Chargement...</small>
+                    </div>
+                    <button id="bouton-deconnexion"
+                            class="bouton-secondaire"
+                            type="button">
+                        Déconnexion
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <section class="bienvenue">
+            <h2>Créer un affichage</h2>
+            <p>
+                Une même variable peut être utilisée dans plusieurs affichages.
+                Par exemple, créez deux graphiques de température avec des
+                titres et des périodes différents.
+            </p>
+        </section>
+
+        <section class="section-tableau">
+            <div class="titre-section">
+                <div>
+                    <h2 id="titre-formulaire-affichage">Nouvel affichage</h2>
+                    <p>Choisissez la variable et sa présentation.</p>
+                </div>
+            </div>
+
+            <form id="form-affichage" class="formulaire-affichage">
+                <input type="hidden" id="affichage-id">
+
+                <label for="affichage-titre">Titre personnalisé</label>
+                <input id="affichage-titre"
+                       type="text"
+                       maxlength="100"
+                       placeholder="Ex. Température - dernière heure">
+
+                <label for="affichage-variable">Variable industrielle</label>
+                <select id="affichage-variable" required>
+                    <option value="">Chargement des variables...</option>
+                </select>
+
+                <label for="affichage-type">Type d'affichage</label>
+                <select id="affichage-type" required>
+                    <option value="valeur">Valeur simple</option>
+                    <option value="carte" selected>Carte</option>
+                    <option value="jauge">Jauge</option>
+                    <option value="graphique">Graphique</option>
+                </select>
+
+                <label for="affichage-periode">Période (minutes)</label>
+                <input id="affichage-periode"
+                       type="number"
+                       min="1"
+                       max="525600"
+                       value="60"
+                       required>
+
+                <label for="affichage-ordre">Ordre d'affichage</label>
+                <input id="affichage-ordre"
+                       type="number"
+                       min="0"
+                       step="1"
+                       value="1"
+                       required>
+
+                <label class="champ-case">
+                    <input id="affichage-visible" type="checkbox" checked>
+                    Afficher sur le tableau de bord
+                </label>
+
+                <div class="actions-parametres">
+                    <button id="bouton-sauvegarder-affichage"
+                            class="bouton-principal"
+                            type="submit">
+                        Créer l'affichage
+                    </button>
+
+                    <button id="bouton-annuler-modification"
+                            class="bouton-secondaire"
+                            type="button"
+                            hidden>
+                        Annuler la modification
+                    </button>
+                </div>
+
+                <p id="message-affichage" class="message" role="status"></p>
+            </form>
+        </section>
+
+        <section class="section-tableau">
+            <div class="titre-section">
+                <div>
+                    <h2>Mes affichages</h2>
+                    <p>
+                        Chaque affichage possède ses propres paramètres,
+                        même si plusieurs utilisent la même variable.
+                    </p>
+                </div>
+            </div>
+
+            <p id="message-liste-affichages" class="message">
+                Chargement des affichages...
+            </p>
+
+            <div id="liste-affichages" class="liste-preferences"></div>
+        </section>
+    </main>
+</body>
+</html>
