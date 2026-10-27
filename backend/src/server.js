@@ -9,5 +9,5 @@ app.listen(PORT, "0.0.0.0", () => {
     console.log(`Serveur démarré sur le port ${PORT}`);
 
     lireAutomates();
-    setInterval(lireAutomates, 2000);
+    setInterval(lireAutomates, 500);
 });

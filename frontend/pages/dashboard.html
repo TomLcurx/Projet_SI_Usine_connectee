@@ -1,1 +1,100 @@
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Usine Connectée</title>
+    <link rel="stylesheet" href="../style.css">
+    <script src="../js/script.js" defer></script>
+</head>
+<body class="page-application">
+    <aside class="barre-laterale">
+        <div class="logo-usine">
+            <span>UC</span>
+            <div>
+                <strong>Usine Connectée</strong>
+                <small>Supervision industrielle</small>
+            </div>
+        </div>
 
+        <nav>
+            <a class="lien-navigation actif" href="dashboard.html">Tableau de bord</a>
+            <a class="lien-navigation" href="historique.html">Historique</a>
+            <a class="lien-navigation" href="personnalisation.html">Personnalisation</a>
+            <a class="lien-navigation" href="parametres.html">Paramètres</a>
+        </nav>
+
+        <div class="bas-sidebar">
+            <span>Projet étudiant</span>
+            <small>UniLaSalle Amiens</small>
+        </div>
+    </aside>
+
+    <main class="contenu-principal">
+        <header class="barre-superieure">
+            <div>
+                <h1>Tableau de bord</h1>
+                <p>Vue d'ensemble de votre système industriel</p>
+            </div>
+
+            <div class="actions-haut">
+                <span id="etat-api" class="indicateur-api">Vérification du serveur...</span>
+                <div class="profil-utilisateur">
+                    <span class="icone-utilisateur">U</span>
+                    <div>
+                        <strong id="nom-utilisateur">Utilisateur</strong>
+                        <small id="role-utilisateur">Chargement...</small>
+                    </div>
+                    <button id="bouton-deconnexion" class="bouton-secondaire" type="button">
+                        Déconnexion
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <section class="bienvenue">
+            <h2>Bienvenue sur votre espace de supervision</h2>
+            <p>Retrouvez ici l'état de vos automates et les principales mesures de votre installation.</p>
+        </section>
+
+        <section class="grille-indicateurs">
+            <article class="carte-indicateur">
+                <span>Automates</span>
+                <strong id="nombre-automates">—</strong>
+                <small>Automates enregistrés</small>
+            </article>
+
+            <article class="carte-indicateur">
+                <span>Variables</span>
+                <strong id="nombre-variables">—</strong>
+                <small>Variables configurées</small>
+            </article>
+
+            <article class="carte-indicateur">
+                <span>Serveur API</span>
+                <strong id="statut-serveur">—</strong>
+                <small>État de la communication</small>
+            </article>
+        </section>
+
+        
+        <section class="section-tableau">
+            <div class="titre-section">
+                <div>
+                    <h2>Mesures en direct</h2>
+                    <p>Suivi en temps réel des variables industrielles</p>
+                </div>
+                <span class="badge-direct">
+                    <span class="point-direct"></span>
+                    Actualisation automatique
+                </span>
+            </div>
+
+            <p id="message-mesures" class="message-mesures">
+                Chargement des mesures...
+            </p>
+
+            <div id="mesures-container" class="grille-mesures"></div>
+        </section>
+    </main>
+</body>
+</html>

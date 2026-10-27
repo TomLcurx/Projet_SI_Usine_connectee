@@ -3,6 +3,9 @@ const db = require("./config");
 
 let lectureEnCours = false;
 
+// Dernière tentative de lecture pour chaque variable
+const dernieresLectures = new Map();
+
 async function lireAutomates() {
     if (lectureEnCours) return;
     lectureEnCours = true;
@@ -33,14 +36,32 @@ async function lireAutomates() {
 
                 const [variables] = await db.query(
                     `SELECT id, nom, adresse_registre,
-                            type_registre, type_donnee, unite,
-                            facteur_conversion, offset_conversion
+                        type_registre, type_donnee, unite,
+                        facteur_conversion, offset_conversion,
+                        intervalle_ms
                     FROM variables
                     WHERE automate_id = ? AND actif = TRUE`,
                     [automate.id]
                 );
 
                 for (const variable of variables) {
+                    const maintenant = Date.now();
+                    const intervalle = Math.max(
+                        100,
+                        Number(variable.intervalle_ms) || 500
+                    );
+
+                    const derniereLecture =
+                        dernieresLectures.get(variable.id) || 0;
+
+                    // Attendre que l'intervalle configuré soit écoulé
+                    if (maintenant - derniereLecture < intervalle) {
+                        continue;
+                    }
+
+                    // Enregistrer le début de la tentative
+                    dernieresLectures.set(variable.id, maintenant);
+
                     try {
                         let valeur;
                         const adresseRegistre =
